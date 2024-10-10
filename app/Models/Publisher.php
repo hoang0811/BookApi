@@ -21,4 +21,8 @@ class Publisher extends Model
             get: fn ($image) => url('/storage/publishers/' . $image),
         );
     }
+    public function books()
+    {
+        return $this->hasMany(Book::class);
+    }
 }

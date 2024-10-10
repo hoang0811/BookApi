@@ -72,7 +72,6 @@ class CoPublisherController extends Controller
             $image = $request->file('image');
             $imagePath = $image->storeAs('co_publishers', $image->hashName(), 'public');
 
-            // Xóa hình ảnh cũ nếu có
             if ($coPublisher->image) {
                 Storage::delete('public/co_publishers/' . $coPublisher->image);
             }
@@ -96,12 +95,10 @@ class CoPublisherController extends Controller
     public function destroy(string $id)
     {
         $coPublisher = CoPublisher::findOrFail($id);
-
-        // Xóa hình ảnh nếu tồn tại
-        if ($coPublisher->image) {
-            Storage::delete('public/co_publishers/' . $coPublisher->image);
+        if (Storage::exists('public/co_publishers/' . basename($coPublisher->image))) {
+            Storage::delete('public/co_publishers/' . basename($coPublisher->image));
         }
-
+    
         $coPublisher->delete();
 
         return new CoPublisherResource(true, 'CoPublisher has been deleted successfully!', null);

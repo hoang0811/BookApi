@@ -35,7 +35,6 @@ public function store(Request $request)
         return response()->json($validator->errors(), 422);
     }
 
-    // Lưu hình ảnh vào disk 'public'
     $image = $request->file('image');
     $imagePath = $image->storeAs('publishers', $image->hashName(), 'public');
 
