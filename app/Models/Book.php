@@ -17,7 +17,7 @@ class Book extends Model
         'translator_id',
         'author_id',
         'category_id',
-        'covertype_id',
+        'cover_type_id',
         'genre_id',
         'language_id',
         'image',
@@ -94,5 +94,6 @@ class Book extends Model
     {
         return $this->hasMany(BookImage::class);
     }
+
 }
 

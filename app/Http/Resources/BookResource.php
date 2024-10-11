@@ -39,6 +39,7 @@ class BookResource extends JsonResource
            'success'   => $this->status,
            'message'   => $this->message,
            'data'      => $this->resource,
+           
        ];
    }
 }

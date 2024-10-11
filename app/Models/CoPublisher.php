@@ -15,7 +15,7 @@ class CoPublisher extends Model
     protected function image(): Attribute
     {
         return Attribute::make(
-            get: fn ($image) => url('/storage/publishers/' . $image),
+            get: fn ($image) => url('/storage/co_publishers/' . $image),
         );
     }
     public function books()

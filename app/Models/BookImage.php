@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 class BookImage extends Model
 {
@@ -16,5 +17,11 @@ class BookImage extends Model
     public function book()
     {
         return $this->belongsTo(Book::class);
+    }
+    protected function image(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($path) => url('/storage/book_images/' . $path),
+        );
     }
 }
