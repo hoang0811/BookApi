@@ -75,6 +75,12 @@ class TranslatorController extends Controller
     public function destroy(string $id)
     {
         $translator = Translator::findOrFail($id);
+        if ($translator->books()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete this Translator because it contains books!',
+            ], 400);
+        }
         $translator->delete();
 
         return new TranslatorResource(true, 'Translator has been deleted successfully!', null);

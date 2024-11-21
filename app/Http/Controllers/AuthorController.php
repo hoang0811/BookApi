@@ -76,6 +76,12 @@ class AuthorController extends Controller
     public function destroy(string $id)
     {
         $author = Author::findOrFail($id);
+        if ($author->books()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete this author because it contains books!',
+            ], 400);
+        }
         $author->delete();
 
         return new AuthorResource(true, 'Author has been deleted successfully!', null);

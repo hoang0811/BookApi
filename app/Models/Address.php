@@ -9,7 +9,7 @@ class Address extends Model
 {
     use HasFactory;
 
-    // Các thuộc tính có thể gán
+
     protected $fillable = [
         'user_id',
         'name',
@@ -22,11 +22,6 @@ class Address extends Model
         'address_type',
         'is_default',
     ];
-
-    // Các thuộc tính không thể gán
-    protected $guarded = ['id', 'created_at', 'updated_at'];
-
-    // Quan hệ với mô hình User
     public function user()
     {
         return $this->belongsTo(User::class);

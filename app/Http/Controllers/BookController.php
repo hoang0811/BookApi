@@ -16,7 +16,7 @@ class BookController extends Controller
      */
     public function index()
     {
-        $books =  Book::with('images')->orderBy('id', 'DESC')->paginate(10);
+        $books =  Book::all();
         return new BookResource(true, 'Data retrieved successfully', $books);
 
     }
@@ -25,93 +25,91 @@ class BookController extends Controller
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(),[
+        $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:255',
             'isbn' => 'required|string|unique:books',
-            'publisher_id' => 'nullable|exists:publishers,id',
-            'co_publisher_id' => 'nullable|exists:co_publishers,id',
+            'publisher_id' => 'required|exists:publishers,id',
             'translator_id' => 'nullable|exists:translators,id',
-            'author_id' => 'nullable|exists:authors,id',
-            'category_id' => 'nullable|exists:categories,id',
-            'cover_type_id' => 'nullable|exists:cover_types,id',
-            'genre_id' => 'nullable|exists:genres,id',
-            'language_id' => 'nullable|exists:languages,id',
+            'category_id' => 'required|exists:categories,id',
+            'cover_type_id' => 'required|exists:cover_types,id',
+            'genre_id' => 'required|exists:genres,id',
+            'language_id' => 'required|exists:languages,id',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'description' => 'required|string',
-            'quantity' => 'nullable|integer|min:0',
+            'quantity' => 'required|integer|min:0',
             'original_price' => 'required|numeric|min:0',
             'discount_price' => 'nullable|numeric|min:0',
-            'internal_code' => 'required|string',
             'published_year' => 'required|integer',
-            'published_date' => 'required|date',
             'number_pages' => 'required|integer',
             'size' => 'required|string',
             'weight' => 'required|numeric|min:0',
-            'keywords' => 'nullable|string',
-            'status' => 'nullable|in:instock,out_of_stock,pre_order',
+            'status' => 'required|in:instock,out_of_stock,pre_order',
+            'authors' => 'required|array',
+            'authors.*' => 'exists:authors,id', // Kiểm tra danh sách tác giả
         ]);
     
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
-
+    
         $image = $request->file('image');
         $imagePath = $image->storeAs('books', $image->hashName(), 'public');
-
-        $book = Book::create(array_merge($request->all(), ['image' => baseName($imagePath)]));
+    
+        $book = Book::create(array_merge($request->all(), ['image' => basename($imagePath)]));
+    
+        $book->authors()->sync($request->authors);
+    
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $images) {
                 $path = $images->storeAs('book_images', $images->hashName(), 'public');
-                
-                $book->images()->create([
-                    'path' => basename($path),
-                ]);
+                $book->images()->create(['path' => basename($path)]);
             }
         }
-
+    
         return new BookResource(true, 'Book created successfully', $book);
-
     }
+    
 
     /**
      * Display the specified resource.
      */
     public function show(string $id)
     {
-        $book = Book::with('images')->findOrFail($id);
-        return new BookResource(true,'Detail Data Book ',$book);
+        $book = Book::with([
+            'images', 'publisher', 'genre', 'category', 'language', 'cover_type', 'translator', 'authors'
+        ])->findOrFail($id);
+    
+        return new BookResource(true, 'Detail Data Book', $book);
     }
+    
     /**
      * Update the specified resource in storage.
      */
     public function update(Request $request, $id)
     {
-        $validator = Validator::make($request->all(),[
+        $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:255',
             'isbn' => 'required|string|unique:books,isbn,' . $id,
-            'publisher_id' => 'nullable|exists:publishers,id',
-            'co_publisher_id' => 'nullable|exists:co_publishers,id',
+            'publisher_id' => 'required|exists:publishers,id',
             'translator_id' => 'nullable|exists:translators,id',
-            'author_id' => 'nullable|exists:authors,id',
-            'category_id' => 'nullable|exists:categories,id',
-            'cover_type_id' => 'nullable|exists:cover_types,id',
-            'genre_id' => 'nullable|exists:genres,id',
-            'language_id' => 'nullable|exists:languages,id',
+            'category_id' => 'required|exists:categories,id',
+            'cover_type_id' => 'required|exists:cover_types,id',
+            'genre_id' => 'required|exists:genres,id',
+            'language_id' => 'required|exists:languages,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'description' => 'required|string',
-            'quantity' => 'nullable|integer|min:0',
+            'quantity' => 'required|integer|min:0',
             'original_price' => 'required|numeric|min:0',
             'discount_price' => 'nullable|numeric|min:0',
-            'internal_code' => 'required|string',
             'published_year' => 'required|integer',
-            'published_date' => 'required|date',
             'number_pages' => 'required|integer',
             'size' => 'required|string',
             'weight' => 'required|numeric|min:0',
-            'keywords' => 'nullable|string',
-            'status' => 'nullable|in:instock,out_of_stock,pre_order',
+            'status' => 'required|in:instock,out_of_stock,pre_order',
+            'authors' => 'required|array',
+            'authors.*' => 'exists:authors,id', // Kiểm tra danh sách tác giả
         ]);
     
         if ($validator->fails()) {
@@ -128,25 +126,27 @@ class BookController extends Controller
             $imagePath = $image->storeAs('books', $image->hashName(), 'public');
             $book->image = basename($imagePath);
         }
-        
+    
+        $book->update($request->except('image', 'images', 'authors'));
+    
+        // Cập nhật danh sách tác giả
+        $book->authors()->sync($request->authors);
+    
         if ($request->hasFile('images')) {
             foreach ($book->images as $img) {
                 Storage::delete('public/book_images/' . $img->path);
             }
-                $book->images()->delete();
+            $book->images()->delete();
     
             foreach ($request->file('images') as $images) {
                 $path = $images->storeAs('book_images', $images->hashName(), 'public');
-                $book->images()->create([
-                    'path' => basename($path),
-                ]);
+                $book->images()->create(['path' => basename($path)]);
             }
         }
     
-        $book->update($request->except('image', 'images'));
-    
         return new BookResource(true, 'Book updated successfully', $book);
     }
+    
     
 
     /**

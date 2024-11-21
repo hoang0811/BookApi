@@ -13,9 +13,7 @@ class Book extends Model
         'title',
         'isbn',
         'publisher_id',
-        'co_publisher_id',
         'translator_id',
-        'author_id',
         'category_id',
         'cover_type_id',
         'genre_id',
@@ -25,13 +23,10 @@ class Book extends Model
         'quantity',
         'original_price',
         'discount_price',
-        'internal_code',
         'published_year',
-        'published_date',
         'number_pages',
         'size',
         'weight',
-        'keywords',
         'status',
     ];
 
@@ -47,13 +42,6 @@ class Book extends Model
     {
         return $this->belongsTo(Publisher::class);
     }
-
-    // Liên kết đến CoPublisher
-    public function coPublisher()
-    {
-        return $this->belongsTo(CoPublisher::class, 'co_publisher_id');
-    }
-
     // Liên kết đến Translator
     public function translator()
     {
@@ -61,9 +49,9 @@ class Book extends Model
     }
 
     // Liên kết đến Author
-    public function author()
+    public function authors()
     {
-        return $this->belongsTo(Author::class);
+        return $this->belongsToMany(Author::class, 'author_book', 'book_id', 'author_id');
     }
 
     // Liên kết đến Category
@@ -73,7 +61,7 @@ class Book extends Model
     }
 
     // Liên kết đến CoverType
-    public function coverType()
+    public function cover_type()
     {
         return $this->belongsTo(CoverType::class,'cover_type_id');
     }
@@ -81,7 +69,7 @@ class Book extends Model
     // Liên kết đến Genre
     public function genre()
     {
-        return $this->belongsTo(Genres::class);
+        return $this->belongsTo(Genre::class,'genre_id');
     }
 
     // Liên kết đến Language

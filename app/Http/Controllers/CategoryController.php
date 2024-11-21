@@ -26,7 +26,6 @@ class CategoryController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:100',
-            'parent_id' => 'nullable|integer|exists:categories,id',
         ]);
 
         if ($validator->fails()) {
@@ -54,7 +53,6 @@ class CategoryController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:100',
-            'parent_id' => 'nullable|integer|exists:categories,id',
         ]);
 
         if ($validator->fails()) {
@@ -73,6 +71,12 @@ class CategoryController extends Controller
     public function destroy($id)
     {
         $category = Category::findOrFail($id);
+        if ($category->books()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete this category because it contains books!',
+            ], 400);
+        }
         $category->delete();
 
         return new CategoryResource(true, 'Category deleted successfully!', null);

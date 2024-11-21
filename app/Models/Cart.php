@@ -5,12 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Genres extends Model
+class Cart extends Model
 {
     use HasFactory;
+    protected $fillable = ['user_id','subtotal'];
 
-    public function books()
+    public function items()
     {
-        return $this->hasMany(Book::class);
+        return $this->hasMany(CartItem::class);
     }
 }

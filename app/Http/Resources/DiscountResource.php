@@ -5,7 +5,7 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class BookResource extends JsonResource
+class DiscountResource extends JsonResource
 {
    //define properti
    public $status;
@@ -38,7 +38,7 @@ class BookResource extends JsonResource
        return [
            'success'   => $this->status,
            'message'   => $this->message,
-           'data'      => $this->resource,
+           'data'      => $this->resource
        ];
    }
 }
