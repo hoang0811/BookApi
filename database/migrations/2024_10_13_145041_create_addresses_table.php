@@ -23,9 +23,6 @@ class CreateAddressesTable extends Migration
             
             // Khóa ngoại
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('district_id')->references('id')->on('districts')->onDelete('cascade');
-            $table->foreign('ward_id')->references('id')->on('wards')->onDelete('cascade');
-            $table->foreign('province_id')->references('id')->on('provinces')->onDelete('cascade');
         });
     }
 

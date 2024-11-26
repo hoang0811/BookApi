@@ -25,7 +25,9 @@ class Book extends Model
         'discount_price',
         'published_year',
         'number_pages',
-        'size',
+        'length',
+        'width',
+        'height',
         'weight',
         'status',
     ];

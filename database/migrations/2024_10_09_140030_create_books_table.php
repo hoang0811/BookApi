@@ -28,7 +28,9 @@ return new class extends Migration
             $table->decimal('discount_price', 10, 2)->nullable();
             $table->year('published_year')->nullable();
             $table->integer('number_pages')->nullable();
-            $table->string('size')->nullable();
+            $table->decimal('length', 8, 2)->nullable();
+            $table->decimal('width', 8, 2)->nullable();
+            $table->decimal('height', 8, 2)->nullable();
             $table->decimal('weight', 10, 2)->nullable();
             $table->enum('status', ['instock', 'out_of_stock', 'pre_order'])->default('instock');
         

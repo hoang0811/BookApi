@@ -8,9 +8,12 @@ use Illuminate\Database\Eloquent\Model;
 class Ward extends Model
 {
     use HasFactory;
-
     public function district()
     {
         return $this->belongsTo(District::class);
+    }
+    public function addresses()
+    {
+        return $this->hasMany(Address::class);
     }
 }

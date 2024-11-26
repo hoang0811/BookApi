@@ -9,209 +9,298 @@ use App\Models\Discount;
 use App\Models\Order;
 use App\Models\OrderDetail;
 use App\Models\Transaction;
+use App\Models\Address;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Http;
+
 
 class CheckoutController extends Controller
 {
-    public function index(Request $request)
+    public function getCheckoutData(Request $request)
     {
-        $orders = Order::where('user_id', $request->user()->id)->orderBy('order_date', 'desc')->get();
-
-        if ($orders->isEmpty()) {
-            return response()->json(['message' => 'No orders found.'], 404);
+        $user = $request->user();
+        $cart = Cart::with('items.book')->where('user_id', $user->id)->first();
+    
+        if (!$cart || $cart->items->isEmpty()) {
+            return response()->json(['message' => 'Cart is empty.'], 400);
         }
-
-        return response()->json($orders);
+    
+        // Lấy tất cả địa chỉ của người dùng
+        $addresses = Address::where('user_id', $user->id)->get();
+    
+        // Lấy địa chỉ mặc định của người dùng
+        $defaultAddress = Address::where('user_id', $user->id)
+                                 ->where('is_default', 1)
+                                 ->first();
+    
+        // Tính phí vận chuyển cho giỏ hàng với địa chỉ mặc định
+        $shippingFee = $this->getCartShippingFee($cart, $defaultAddress);
+    
+        return response()->json([
+            'cart' => $cart,
+            'addresses' => $addresses,
+            'default_address' => $defaultAddress,
+            'shipping_fee' => $shippingFee,
+        ]);
     }
     
-
-    public function show($id)
+    public function getAvailableServices($fromDistrict, $toDistrict)
     {
-        $order = Order::with('orderDetails', 'orderDetails.book')->find($id);
 
-        if (!$order) {
-            return response()->json(['message' => 'Order not found.'], 404);
-        }
+    $response = Http::withHeaders([
+        'token' => '6b1037e4-a742-11ef-b2c1-a2ca9b658e40',
+        ])->withOptions([
+        'verify' => false,  // Tắt xác minh SSL
+    ])->post('https://online-gateway.ghn.vn/shiip/public-api/v2/shipping-order/available-services', [
+        'shop_id' => 5469429,
+        'from_district' => (int) $fromDistrict,
+        'to_district' => (int) $toDistrict,
+    ]);
 
-        return response()->json($order);
+    if ($response->successful()) {
+        return $response->json();
     }
-    public function updateStatus(Request $request, $id)
+    return null;
+
+}
+
+    // Hàm tính phí vận chuyển
+    public function calculateShippingFee($serviceId, $insuranceValue, $coupon, $fromDistrictId, $toDistrictId, $toWardCode, $weight, $length, $width, $height)
     {
-        $request->validate([
-            'order_status' => 'required|in:ordered,delivered,canceled,rejected,returned',
+        $response = Http::withHeaders([
+            'token' => '6b1037e4-a742-11ef-b2c1-a2ca9b658e40',
+            'shop_id' =>5469429,
+            ])->withOptions([
+                'verify' => false,
+        ])->post('https://online-gateway.ghn.vn/shiip/public-api/v2/shipping-order/fee', [
+            'service_id' => $serviceId,
+            'insurance_value' => $insuranceValue,
+            'coupon' => $coupon,
+            'from_district_id' => $fromDistrictId,
+            'to_district_id' => (int) $toDistrictId,
+            'to_ward_code' => $toWardCode,
+            'weight' => $weight,
+            'length' => $length,
+            'width' => $width,
+            'height' => $height,
         ]);
 
-        $order = Order::find($id);
-
-        if (!$order) {
-            return response()->json(['message' => 'Order not found.'], 404);
+        if ($response->successful()) {
+            return $response->json();
         }
 
-        $order->order_status = $request->order_status;
-        $order->save();
-
-        return response()->json(['message' => 'Order status updated successfully.', 'order' => $order]);
+        return null;
     }
-    public function cancelOrder(Request $request, $id)
+
+    // Hàm tính phí vận chuyển giỏ hàng
+    public function getCartShippingFee($cart, $address)
     {
-        $order = Order::find($id);
+        // Lấy thông tin địa chỉ
+        $fromDistrictId = 1450;  // Quận của người gửi (giả sử)
+        $toDistrictId = $address->district_id;  // Quận của người nhận
+        $toWardCode = $address->ward_id;  // Phường/Xã người nhận
 
-        if (!$order) {
-            return response()->json(['message' => 'Order not found.'], 404);
+        // Tính tổng trọng lượng giỏ hàng
+        $totalWeight = 0;
+        $totalValue = 0;
+        $totalLength = 0;
+        $totalWidth = 0;
+        $totalHeight = 0;
+
+        foreach ($cart->items as $item) {
+            $totalWeight += $item->book->weight * $item->quantity;  // Tính trọng lượng tổng
+            $totalValue += $item->price * $item->quantity;  // Tính giá trị tổng giỏ hàng
+        }
+        foreach ($cart->items as $item) {
+            for ($i = 0; $i < $item->quantity; $i++) {
+                $totalLength = max($totalLength, $item->book->length); // Chiều dài lớn nhất
+                $totalWidth += $item->book->width; // Cộng dồn chiều rộng
+                $totalHeight = max($totalHeight, $item->book->height); // Chiều cao lớn nhất
+            }
         }
 
-        if ($order->order_status === 'delivered' || $order->order_status === 'returned') {
-            return response()->json(['message' => 'Cannot cancel delivered or returned orders.'], 400);
+        // Lấy gói dịch vụ khả dụng
+        $availableServices = $this->getAvailableServices($fromDistrictId, $toDistrictId);
+
+        if (!$availableServices || empty($availableServices['data'])) {
+            return 'Không có gói dịch vụ khả dụng';
         }
 
-        $order->order_status = 'canceled';
-        $order->canceled_at = now();
-        $order->save();
+        // Chọn một gói dịch vụ (giả sử lấy service_id đầu tiên)
+        $serviceId = $availableServices['data'][0]['service_id'];
 
-        return response()->json(['message' => 'Order has been canceled successfully.']);
+        // Tính phí vận chuyển
+        $shippingFeeResponse = $this->calculateShippingFee(
+            $serviceId,
+            $totalValue,
+            null,
+            $fromDistrictId,
+            $toDistrictId,
+            $toWardCode,
+            $totalWeight,
+            $totalLength,  // Tổng chiều dài
+            $totalWidth,   // Tổng chiều rộng
+            $totalHeight   // Tổng chiều cao
+        );
+       
+        if ($shippingFeeResponse) {
+            return $shippingFeeResponse['data']['total'];  // Trả về tổng phí vận chuyển
+        }
+
+        return 'Không thể tính phí vận chuyển';
     }
-    public function refundOrder(Request $request, $id)
+
+    // Hàm lấy phí vận chuyển cho giỏ hàng
+    public function getShippingFeeForCart(Request $request)
     {
-        $order = Order::find($id);
+        $user = $request->user();
+        $cart = Cart::with('items.book')->where('user_id', $user->id)->first();
 
-        if (!$order) {
-            return response()->json(['message' => 'Order not found.'], 404);
+        $addressId = $request->address_id;
+        $address = $addressId ? Address::find($addressId) : Address::where('user_id', $cart->user_id)->where('is_default', 1)->first();
+        if (!$address) {
+            return response()->json(['error' => 'Địa chỉ không hợp lệ.'], 404);
         }
-
-        if ($order->order_status !== 'delivered') {
-            return response()->json(['message' => 'Refund can only be processed for delivered orders.'], 400);
+    
+        $shippingFee = $this->getCartShippingFee($cart, $address);
+        
+        if ($shippingFee === 'Không có gói dịch vụ khả dụng') {
+            return response()->json(['error' => 'Không có gói dịch vụ khả dụng.'], 400);
         }
+        
+        return response()->json(['shipping_fee' => $shippingFee]);
+    }
 
-        $refundAmount = $order->total_amount - $order->total_discount;
-
-        Transaction::create([
-            'order_id' => $order->id,
-            'transaction_date' => now(),
-            'amount' => $refundAmount,
-            'payment_method' => 'cod',
-            'transaction_status' => 'refunded',
-            'refund_amount' => $refundAmount,
+    public function applyDiscount(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'code' => 'required|string|max:50',
         ]);
 
-        $order->order_status = 'returned';
-        $order->save();
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
 
-        return response()->json(['message' => 'Refund processed successfully.', 'order' => $order]);
-    }
-    public function createForAdmin(Request $request)
-    {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:15',
-            'email' => 'nullable|email|max:255',
-            'district' => 'required|string|max:255',
-            'province' => 'required|string|max:255',
-            'ward' => 'required|string|max:255',
-            'street' => 'required|string|max:255',
-            'items' => 'required|array',
-            'items.*.book_id' => 'required|exists:books,id',
-            'items.*.quantity' => 'required|integer|min:1',
-        ]);
+        $cart = Cart::where('user_id', $request->user()->id)->first();
+        if (!$cart) {
+            return response()->json(['message' => 'Cart not found.'], 404);
+        }
 
-        $order = Order::create([
-            'user_id' => $request->user_id,
-            'name' => $request->name,
-            'phone' => $request->phone,
-            'email' => $request->email,
-            'district' => $request->district,
-            'province' => $request->province,
-            'ward' => $request->ward,
-            'street' => $request->street,
-            'order_date' => now(),
-            'total_amount' => 0,
-            'total_discount' => 0,
-            'order_status' => 'ordered',
-        ]);
+        $discountValue = $this->calculateDiscountValue($request->code, $cart->subtotal);
 
-        $totalAmount = 0;
-
-        foreach ($request->items as $item) {
-            $book = Book::find($item['book_id']);
-            $totalAmount += $book->price * $item['quantity'];
-
-            OrderDetail::create([
-                'order_id' => $order->id,
-                'book_id' => $book->id,
-                'quantity' => $item['quantity'],
-                'price' => $book->price,
+        if ($discountValue > 0) {
+            $discount = Discount::where('code', $request->code)->first();
+            return response()->json([
+                'discount' => $discountValue,
+                'discount_id' => $discount->id,
             ]);
         }
 
-        $order->total_amount = $totalAmount;
-        $order->save();
+        return response()->json([
+            'discount' => 0,
+            'discount_id' => null,
+            'message' => 'Invalid or expired discount code.',
+        ]);
+    }
 
-        return response()->json(['message' => 'Order created successfully for the user.', 'order' => $order]);
+    protected function calculateDiscountValue($code, $subtotal)
+    {
+        $discount = Discount::where('code', $code)->first();
+
+        if (!$discount || !$discount->is_active || now()->greaterThan($discount->end_date)) {
+            return 0;
+        }
+
+        if ($subtotal < $discount->cart_value) {
+            return 0;
+        }
+
+        if ($discount->usage_limit <= 0) {
+            return 0;
+        }
+
+        if ($discount->discount_type === 'percent') {
+            return round($subtotal * $discount->discount_value / 100, 2);
+        } else {
+            return min($discount->discount_value, $subtotal);
+        }
     }
 
     public function checkout(Request $request)
     {
         $user = $request->user();
         $cart = Cart::where('user_id', $user->id)->first();
-
+    
         if (!$cart || $cart->items->isEmpty()) {
             return response()->json(['message' => 'Cart is empty.'], 400);
         }
-
+    
         $request->validate([
-            'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:15',
-            'email' => 'required|email|max:255',
-            'district' => 'required|string|max:255',
-            'province' => 'required|string|max:255',
-            'ward' => 'required|string|max:255',
-            'street' => 'required|string|max:255',
+            'address_id' => 'required|exists:addresses,id',
             'payment_method' => 'required|string|in:cod,momo,vnpay',
         ]);
-
+    
+        // Lấy địa chỉ dựa vào address_id
+        $address = Address::where('id', $request->address_id)
+            ->where('user_id', $user->id)
+            ->first();
+    
+        if (!$address) {
+            return response()->json(['message' => 'Invalid address.'], 400);
+        }
+    
+        $shippingFee = $request->shipping_fee ?? 0;
+        $discount = $request->discount ?? 0;
+        $totalAmount = $cart->subtotal + $shippingFee - $discount;
+    
+        if ($totalAmount < 0) {
+            return response()->json(['message' => 'Total amount cannot be negative.'], 400);
+        }
+    
+        // Lưu thông tin đơn hàng
         $order = Order::create([
             'user_id' => $user->id,
-            'name' => $request->name,
-            'phone' => $request->phone,
-            'email' => $request->email,
-            'district' => $request->district,
-            'province' => $request->province,
-            'ward' => $request->ward,
-            'street' => $request->street,
+            'name' => $address->name,
+            'phone' => $address->phone,
+            'province' => $address->province_id,
+            'district' => $address->district_id,
+            'ward' => $address->ward_id,
+            'street' => $address->street,
             'order_date' => now(),
-            'total_amount' => $cart->subtotal,
-            'total_discount' => $request->discount ?? 0,
-            'shipping_fre' => $request ->shipping_fee,
+            'total_amount' => $totalAmount,
+            'total_discount' => $discount,
+            'shipping_fee' => $shippingFee,
             'discount_id' => $request->discount_id ?? null,
-            'mavd'=> "",
+            'mavd' => "",
             'order_status' => 'ordered',
         ]);
-
+    
+        // Lưu chi tiết đơn hàng
         foreach ($cart->items as $item) {
             OrderDetail::create([
                 'order_id' => $order->id,
                 'book_id' => $item->book_id,
                 'quantity' => $item->quantity,
                 'price' => $item->price,
-                'option' => $item->option ?? null,
             ]);
         }
+    
+        // Xử lý giao dịch theo phương thức thanh toán
         if ($request->payment_method === 'cod') {
             Transaction::create([
                 'order_id' => $order->id,
                 'transaction_date' => now(),
-                'amount' => $cart->subtotal - ($request->discount ?? 0),
+                'amount' => $totalAmount,
                 'payment_method' => 'cod',
                 'transaction_status' => 'pending',
             ]);
         } elseif ($request->payment_method === 'momo') {
-
             $paymentResponse = $this->processMoMoPayment($order);
-            
             if ($paymentResponse['status'] === 'success') {
                 Transaction::create([
                     'order_id' => $order->id,
                     'transaction_date' => now(),
-                    'amount' => $cart->subtotal - ($request->discount ?? 0),
+                    'amount' => $totalAmount,
                     'payment_method' => 'momo',
                     'transaction_status' => 'completed',
                 ]);
@@ -219,14 +308,12 @@ class CheckoutController extends Controller
                 return response()->json(['message' => 'MoMo payment failed.'], 400);
             }
         } elseif ($request->payment_method === 'vnpay') {
-
             $paymentResponse = $this->processVNPayPayment($order);
-            
             if ($paymentResponse['status'] === 'success') {
                 Transaction::create([
                     'order_id' => $order->id,
                     'transaction_date' => now(),
-                    'amount' => $cart->subtotal - ($request->discount ?? 0),
+                    'amount' => $totalAmount,
                     'payment_method' => 'vnpay',
                     'transaction_status' => 'completed',
                 ]);
@@ -234,35 +321,27 @@ class CheckoutController extends Controller
                 return response()->json(['message' => 'VNPay payment failed.'], 400);
             }
         }
-        
-        
+    
+        // Giảm số lần sử dụng mã giảm giá (nếu có)
         if ($request->discount_id) {
             $discount = Discount::find($request->discount_id);
             if ($discount && $discount->usage_limit > 0) {
                 $discount->decrement('usage_limit');
             }
         }
-
-
+    
+        // Xóa giỏ hàng sau khi đặt hàng thành công
         $cart->items()->delete();
         $cart->delete();
-
+    
         return response()->json([
-            'message' => 'Checkout completed successfully with COD.',
+            'message' => 'Checkout completed successfully.',
             'order_id' => $order->id,
         ], 201);
     }
-    function tinhtien ()
-    {
-        
-    }
+    
 
-    function processMoMoPayment()
-    {
-    }
-    function processVNPayPayment()
-    {
 
-    }
-
+    function processMoMoPayment() {}
+    function processVNPayPayment() {}
 }

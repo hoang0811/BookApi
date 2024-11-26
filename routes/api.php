@@ -1,13 +1,16 @@
 <?php
-
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\LocaltionController;
+use App\Http\Controllers\CheckoutController;
 use Illuminate\Http\Request;
+
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
 Route::group([
     'middleware' => 'api',
     'prefix' => 'auth',
@@ -23,9 +26,9 @@ Route::group([
     Route::apiResource('/addresses', App\Http\Controllers\AddressController::class)->middleware('auth:api');
 });
 
-Route::get('/provinces', [App\Http\Controllers\LocationController::class, 'showAllProvinces']);
-Route::get('/provinces/{provinceId}/districts', [App\Http\Controllers\LocationController::class, 'showDistrictsByProvince']);
-Route::get('/districts/{districtId}/wards', [App\Http\Controllers\LocationController::class, 'showWardsByDistrict']);
+Route::get('/provinces', [LocaltionController::class, 'getProvince']);
+Route::get('/districts', [LocaltionController::class, 'getDistrict']);
+Route::get('/wards', [LocaltionController::class, 'getWard']);
 
 Route::apiResource('/publishers', App\Http\Controllers\PublisherController::class);
 Route::apiResource('/authors', App\Http\Controllers\AuthorController::class);
@@ -37,11 +40,15 @@ Route::apiResource('/languages', App\Http\Controllers\LanguageController::class)
 Route::apiResource('/genres', App\Http\Controllers\GenreController::class)->only(['index']);
 Route::apiResource('/discounts', App\Http\Controllers\DiscountController::class);
 
-Route::get('/cart', [CartController::class, 'index']);
-Route::post('/cart/add', [CartController::class, 'addItem']);
-Route::post('/cart/apply-coupon', [CartController::class, 'applyDiscount']);
-Route::delete('/cart/remove-coupon', [CartController::class, 'removeCoupon']);
-Route::put('/cart/increase-quantity/{rowId}', [CartController::class, 'increaseItem']);
-Route::put('/cart/decrease-quantity/{rowId}', [CartController::class, 'decreaseItem']);
-Route::delete('/cart/remove/{rowId}', [CartController::class, 'removeItem']);
-Route::delete('/cart/clear', [CartController::class, 'clearCart']);
+Route::get('/cart', [CartController::class, 'index'])->middleware('auth:api');
+Route::post('/cart/add', [CartController::class, 'addItem'])->middleware('auth:api');
+Route::put('/cart/increase-quantity/{itemId}', [CartController::class, 'increaseItem'])->middleware('auth:api');
+Route::put('/cart/decrease-quantity/{itemId}', [CartController::class, 'decreaseItem'])->middleware('auth:api');
+Route::delete('/cart/remove/{itemId}', [CartController::class, 'removeItem'])->middleware('auth:api');
+Route::delete('/cart/clear', [CartController::class, 'clearCart'])->middleware('auth:api');
+
+Route::get('/checkout/data', [CheckoutController::class, 'getCheckoutData'])->middleware('auth:api');
+Route::post('/checkout/discount', [CheckoutController::class, 'applyDiscount'])->middleware('auth:api');
+Route::post('/checkout/shipping', [CheckoutController::class, 'getShippingFeeForCart'])->middleware('auth:api');
+Route::post('/checkout', [CheckoutController::class, 'checkout'])->middleware('auth:api');
+

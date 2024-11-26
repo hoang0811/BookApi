@@ -39,5 +39,9 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT'),
     ],
+    'ghn' => [
+    'token' => env('GHN_API_TOKEN'),
+    'shop' => env('GHN_API_SHOP'),
+],
 
 ];

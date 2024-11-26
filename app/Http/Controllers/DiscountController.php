@@ -28,28 +28,33 @@ class DiscountController extends Controller
      * @return \Illuminate\Http\Response
      */
     public function store(Request $request)
-    {
+{
+    $validator = Validator::make($request->all(), [
+        'code'           => 'required|string|unique:discounts|max:50',
+        'discount_type'  => 'required|in:fixed,percent',
+        'discount_value' => 'required|numeric',
+        'cart_value'     => 'required|numeric',
+        'start_date'     => 'required|date',
+        'end_date'       => 'required|date|after:start_date',
+        'usage_limit'    => 'required|integer',
+        'is_active'      => 'boolean',
+    ]);
 
-        $validator = Validator::make($request->all(), [
-            'code'           => 'required|string|unique:discounts|max:50',
-            'discount_type'  => 'required|in:fixed,percent',
-            'discount_value' => 'required|numeric',
-            'cart_value'     => 'required|numeric',
-            'start_date'     => 'required|date',
-            'end_date'       => 'required|date|after:start_date',
-            'usage_limit'    => 'required|integer',
-            'is_active'      => 'boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 422);
-        }
-
-        // Create a new discount
-        $discount = Discount::create($request->all());
-
-        return new DiscountResource(true, 'Discount created successfully.', $discount);
+    // Check if discount_type is percent and discount_value exceeds 100
+    if ($request->discount_type == 'percent' && $request->discount_value > 100) {
+        return response()->json(['error' => 'Discount value for percent type must be 100 or less.'], 422);
     }
+
+    if ($validator->fails()) {
+        return response()->json(['error' => $validator->errors()], 422);
+    }
+
+    // Create a new discount
+    $discount = Discount::create($request->all());
+
+    return new DiscountResource(true, 'Discount created successfully.', $discount);
+}
+
 
     /**
      * Display the specified discount.
@@ -72,7 +77,7 @@ class DiscountController extends Controller
     public function update(Request $request, $id)
     {
         $discount = Discount::findOrFail($id);
-
+    
         // Validate the request
         $validator = Validator::make($request->all(), [
             'code'           => 'required|string|max:50|unique:discounts,code,' . $discount->id,
@@ -84,14 +89,19 @@ class DiscountController extends Controller
             'usage_limit'    => 'required|integer',
             'is_active'      => 'boolean',
         ]);
-
+    
+        // Check if discount_type is percent and discount_value exceeds 100
+        if ($request->discount_type == 'percent' && $request->discount_value > 100) {
+            return response()->json(['error' => 'Discount value for percent type must be 100 or less.'], 422);
+        }
+    
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 422);
         }
-
+    
         // Update the discount
         $discount->update($request->all());
-
+    
         return new DiscountResource(true, 'Discount updated successfully.', $discount);
     }
 

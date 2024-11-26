@@ -22,11 +22,12 @@ class AddressResource extends JsonResource
             'street' => $this->street,
             'address_type' => $this->address_type,
             'is_default' => $this->is_default,
-            'province' => $this->province->name ?? null,
-            'district' => $this->district->name ?? null,
-            'ward' => $this->ward->name ?? null,
+            'province' => $this->province ? $this->province->name : null,  // Kiểm tra nếu province tồn tại
+            'district' => $this->district ? $this->district->name : null,  // Kiểm tra nếu district tồn tại
+            'ward' => $this->ward ? $this->ward->name : null,  // Kiểm tra nếu ward tồn tại
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];
     }
+    
 }
