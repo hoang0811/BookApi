@@ -175,5 +175,90 @@ class BookController extends Controller
     
         return new BookResource(true, 'Book deleted successfully', null);
     }
+    /**
+ * Search and sort books by multiple criteria.
+ */
+public function search(Request $request)
+{
+    $query = Book::query();
+
+    $hasFilters = false;
+
+   if ($request->filled('keywords')) {
+    $keywords = explode(' ', $request->keywords);
+    $query->where(function ($q) use ($keywords) {
+        foreach ($keywords as $keyword) {
+            $q->orWhere('title', 'like', '%' . $keyword . '%')
+              ->orWhereHas('genre', function ($subQuery) use ($keyword) {
+                  $subQuery->where('name', 'like', '%' . $keyword . '%');
+              });
+        }
+    });
+}
+    // Search by authors
+    if ($request->filled('author_id')) {
+        $query->whereHas('authors', function ($q) use ($request) {
+            $q->where('id', $request->author_id);
+        });
+        $hasFilters = true;
+    }
+
+    // Search by translator
+    if ($request->filled('translator_id')) {
+        $query->where('translator_id', $request->translator_id);
+        $hasFilters = true;
+    }
+
+    // Search by category
+    if ($request->filled('category_id')) {
+        $query->where('category_id', $request->category_id);
+        $hasFilters = true;
+    }
+
+    // Search by genre
+    if ($request->filled('genre_id')) {
+        $query->where('genre_id', $request->genre_id);
+        $hasFilters = true;
+    }
+
+    // Search by language
+    if ($request->filled('language_id')) {
+        $query->where('language_id', $request->language_id);
+        $hasFilters = true;
+    }
+
+    // Search by price range
+    if ($request->filled('min_price')) {
+        $query->where('original_price', '>=', $request->min_price);
+        $hasFilters = true;
+    }
+
+    if ($request->filled('max_price')) {
+        $query->where('original_price', '<=', $request->max_price);
+        $hasFilters = true;
+    }
+
+    // Check if sorting is needed
+    if ($request->filled('sort_by') && $request->filled('sort_order')) {
+        $validSortColumns = ['title', 'original_price', 'created_at'];
+        $validSortOrders = ['asc', 'desc'];
+
+        $sortBy = in_array($request->sort_by, $validSortColumns) ? $request->sort_by : 'title';
+        $sortOrder = in_array($request->sort_order, $validSortOrders) ? $request->sort_order : 'asc';
+
+        $query->orderBy($sortBy, $sortOrder);
+    }
+
+    // Execute query and get results
+    $books = $query->with([
+        'authors', 'publisher', 'genre', 'category', 'language', 'cover_type', 'translator', 'images'
+    ])->get();
+    if ($books->isEmpty()) {
+        return response()->json(['success' => false, 'message' => 'No books found for your search criteria.'], 404);
+    }
+
+    return new BookResource(true, 'Books retrieved successfully', $books);
+}
+
 
 }

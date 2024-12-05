@@ -39,9 +39,14 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT'),
     ],
+    'facebook' => [
+        'client_id' => env('FACEBOOK_CLIENT_ID'),
+        'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
+        'redirect' => env('FACEBOOK_REDIRECT'),
+    ],
     'ghn' => [
-    'token' => env('GHN_API_TOKEN'),
-    'shop' => env('GHN_API_SHOP'),
+        'token' => env('GHN_API_TOKEN'),
+        'shop' => env('GHN_API_SHOP'),
 ],
 
 ];
